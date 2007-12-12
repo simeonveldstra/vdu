@@ -6,5 +6,7 @@ vdu: $(OBJECTS)
 clean:
 	rm -f vdu $(OBJECTS)
 
+test:
+	sh ./test.sh
 
 
