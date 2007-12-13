@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/stat.h>
+#include <math.h>
 #include "scan.h"
 #include "window.h"
 
@@ -33,16 +34,18 @@ char * hread(unsigned long long size) {
 
 void draw_window(wind * w) {
   void paintdir(Ftree * ft, int x, int y, int dx, int dy, int lvl, int c) {
-    c++;
     Ftree * next;
-    float pct;
+    double pct;
+    double roundfactor = 1.0;
+    int reqpix = 0;
     int d, dchild, prog;
 
+    c++;
     /* shrink children
     x++; y++; dx -= 2; dy -= 2;
     */
     //* neato 3D stacks
-    x--; y--; dx--; dy--;
+    //x--; y--; dx--; dy--;
     //*/
     ft->x = x;
     ft->y = y;
@@ -57,7 +60,6 @@ void draw_window(wind * w) {
     //slooooooow!
     //copy_to_screen(w);
 
-    next = ft->child;
     if (lvl % 2) {
       d = dx;
       prog = x;
@@ -65,9 +67,28 @@ void draw_window(wind * w) {
       d = dy;
       prog = y;
     }
+
+    /* In the case of more directories than pixels, the rounding of pixel
+     * values to the nearest integer creates a cumulative error. This is 
+     * not yet a working solution, but it gets it closer than just rounding 
+     * to the center of the pixel.
+     */
+    next = ft->child;
     while (next) {
-      pct = (float) next->size / (float) ft->size;
-      dchild = (int) ((float) d * pct);
+      pct = (double) next->size / (double) ft->size;
+      reqpix += (int) floor(((double) d * pct) + 0.5);
+      next = next->next;
+    }
+    if (reqpix && d) {
+      roundfactor = (double) d / (double) reqpix;
+    }
+    //printf("lvl: %d, d: %d, rqp: %d, rf:%f\n", lvl, d, reqpix, roundfactor);
+
+    next = ft->child;
+    while (next) {
+      pct = (double) next->size / (double) ft->size;
+      //dchild = (int) floor(((double) d * pct) + 0.5);
+      dchild = (int) floor(((double) d * pct * roundfactor)  + 0.4);
       if (lvl % 2) {
         paintdir(next, prog, y, dchild, dy, lvl + 1, c++);
       } else {
@@ -86,7 +107,7 @@ void find_dir(wind * w, int x, int y, unsigned int state, unsigned int code) {
     unsigned long long size = 0;
     void search(Ftree * ft, int x, int y) {
       Ftree * next;
-      if ((x > ft->x && x < ft->x + ft->dx) && (y > ft->y && y < ft->y + ft->dy)) {
+      if ((x >= ft->x && x <= ft->x + ft->dx) && (y >= ft->y && y <= ft->y + ft->dy)) {
         strcpy(name, ft->path);
         size = ft->size;
 

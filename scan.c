@@ -7,7 +7,6 @@
  */
 
 #define _FILE_OFFSET_BITS 64
-
 #include <features.h>
 
 #include <sys/types.h>
@@ -41,6 +40,8 @@ void addchild(Ftree * parent, Ftree * child) {
   } else {
     Ftree * last = parent->child;
     while (last->next) {
+      /* walk backwards through the tree matching inodes to detect loops,
+       * this is crap:
       if (last == last->next) {
         fprintf(stderr, "*** loop detected %s || %s ***\n", last->path, last->next->path);
         last->next = (Ftree *) NULL; 
@@ -50,6 +51,7 @@ void addchild(Ftree * parent, Ftree * child) {
         fprintf(stderr, "*** Child already in list ***\n");
         return;
       }
+      */
       last = last->next;
     }
     last->next = child;
@@ -85,6 +87,16 @@ Ftree * mktree(char * path) {
     fullname[plen] = '\0';
   }
 
+  struct dirent ** dlist;
+  int nd, i, tplen, npos;
+  nd = scandir(path, &dlist, dirfilter, alphasort);
+  if (nd == -1)  {
+    if (dlist) {
+      free(dlist);
+    }
+    return (Ftree *) NULL;
+  }
+
   Ftree * ft;
   ft = malloc(sizeof(Ftree));
   if (!ft) {
@@ -99,12 +111,10 @@ Ftree * mktree(char * path) {
   ft->nchildren = 0;
   strcpy(ft->path, fullname);
 
-  struct dirent ** dlist;
-  int nd, i, tplen, npos;
-  nd = scandir(path, &dlist, dirfilter, alphasort);
-  if ((!dlist) || (nd == -1))  {
-    return (Ftree *) NULL;
+  if (!dlist) { 
+    return ft;
   }
+
   for (i=0;i<nd;i++) {
     tplen = plen;
     npos = 0;
@@ -118,7 +128,7 @@ Ftree * mktree(char * path) {
       free(dlist[i]);
       continue;
     }
-    if ((st.st_mode & S_IFMT) == S_IFDIR) {
+    if (S_ISDIR(st.st_mode)) {
       ft->size += st.st_size;
       addchild(ft, mktree(fullname));
     } else {

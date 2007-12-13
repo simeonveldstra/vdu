@@ -1,9 +1,9 @@
 OBJECTS=scan.o vdu.o window.o
-CFLAGS=-I/usr/X11R6/include
-LDFLAGS=-L/usr/X11R6/lib
+CFLAGS=-I/usr/X11R6/include -Wall
+LDFLAGS=-L/usr/X11R6/lib -lm -lX11
 
 vdu: $(OBJECTS)
-	cc $(LDFLAGS) -lX11 -Wall -o $@ $^
+	cc $(LDFLAGS) -o $@ $^
 
 clean:
 	rm -f vdu $(OBJECTS)
