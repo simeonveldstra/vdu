@@ -91,9 +91,6 @@ Ftree * mktree(char * path) {
   int nd, i, tplen, npos;
   nd = scandir(path, &dlist, dirfilter, alphasort);
   if (nd == -1)  {
-    if (dlist) {
-      free(dlist);
-    }
     return (Ftree *) NULL;
   }
 
