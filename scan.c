@@ -6,6 +6,10 @@
  * sim 9 dec 2007
  */
 
+#define _FILE_OFFSET_BITS 64
+
+#include <features.h>
+
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
@@ -16,6 +20,8 @@
 #include <errno.h>
 
 #include "scan.h"
+
+
 
 int rlvl = 0;
 
@@ -59,7 +65,7 @@ Ftree * mktree(char * path) {
     fprintf(stderr, "Can't stat %s.\n", path);
     return (Ftree *) NULL;
   }
-  if ((st.st_mode & S_IFMT) != S_IFDIR) {
+  if (!S_ISDIR(st.st_mode)) {
     fprintf(stderr, "%s: not a directory.\n", path);
     return (Ftree *) NULL;
   }
