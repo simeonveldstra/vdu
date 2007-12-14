@@ -7,13 +7,13 @@
 #include "scan.h"
 #include "window.h"
 
-unsigned int  colors[] = {0xff0000,
-                         0x00ff00,
-                         0x0000ff,
-                         0x888800,
-                         0x880088,
-                         0x008888};
-int ncolors = 6;
+const unsigned int  colors[] = {0xff0000,
+                                0x00ff00,
+                                0x0000ff,
+                                0x888800,
+                                0x880088,
+                                0x008888};
+const int ncolors = 6;
 
 char * hread(unsigned long long size) {
   char * ret;
@@ -36,8 +36,6 @@ void draw_window(wind * w) {
   void paintdir(Ftree * ft, int x, int y, int dx, int dy, int lvl, int c) {
     Ftree * next;
     double pct;
-    double roundfactor = 1.0;
-    int reqpix = 0;
     int d, dchild, prog;
 
     c++;
@@ -72,7 +70,8 @@ void draw_window(wind * w) {
      * values to the nearest integer creates a cumulative error. This is 
      * not yet a working solution, but it gets it closer than just rounding 
      * to the center of the pixel.
-     */
+    double roundfactor = 1.0;
+    int reqpix = 0;
     next = ft->child;
     while (next) {
       pct = (double) next->size / (double) ft->size;
@@ -83,12 +82,14 @@ void draw_window(wind * w) {
       roundfactor = (double) d / (double) reqpix;
     }
     //printf("lvl: %d, d: %d, rqp: %d, rf:%f\n", lvl, d, reqpix, roundfactor);
+     */
 
     next = ft->child;
     while (next) {
       pct = (double) next->size / (double) ft->size;
-      //dchild = (int) floor(((double) d * pct) + 0.5);
-      dchild = (int) floor(((double) d * pct * roundfactor)  + 0.4);
+      dchild = (int) floor(((double) d * pct) + 0.5);
+      //dchild = (int) floor(((double) d * pct * roundfactor)  + 0.4);
+      //dchild = (int) floor(((double) d * pct) + (0.5 * roundfactor));
       if (lvl % 2) {
         paintdir(next, prog, y, dchild, dy, lvl + 1, c++);
       } else {
@@ -121,7 +122,7 @@ void find_dir(wind * w, int x, int y, unsigned int state, unsigned int code) {
     search((Ftree *) w->udata, x, y);
     char * str;
     str = hread(size);
-    printf("%llu %s  %s\n",size , str, name);
+    printf("%s  %s\n", str, name);
     free(str);
   }
 }

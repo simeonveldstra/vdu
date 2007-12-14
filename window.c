@@ -1,25 +1,13 @@
 
-/* pycanvas window.c
+/* window.c
 *  sim 22 nov 2007
 *
-*  gcc -lX11 -o tst window.c
 */  
-
-/*
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>       // utillity functions chpt. 14, 16
-#include <X11/Xos.h>
-#include <X11/Xcms.h>        // color management chpt. 6
-#include <X11/Xresource.h>   // resource manager chpt. 15
-#include <X11/Xatom.h>       // XA_
-#include <X11/cursorfont.h>  // XC_
-#include <X11/keysymdef.h>   // XK_ must enable group
-#include <X11/keysym.h>      // XK_ enables usual groups 
-*/
 
 
 #include <stdio.h>
 #include <stdlib.h>
+#include <limits.h>
 #include "window.h"
 
 Atom wm_protocols = 0;
@@ -55,16 +43,8 @@ int checkWind(Window ret) {
 }
 
 void _draw(wind * w) {}
-void _buttonkey(wind *w, int x, int y, unsigned int state, unsigned int keycode) {
-#ifdef DEBUG
-  //fprintf(stderr, "button/key up/down: %d, %d - %d, %d\n", x, y, state, keycode);
-#endif
-}
-void _motion(wind *w, int x, int y, unsigned int state) {
-#ifdef DEBUG
-  //fprintf(stderr, "motion %d, %d - %d\n", x, y, state);
-#endif
-}
+void _buttonkey(wind *w, int x, int y, unsigned int state, unsigned int keycode) {}
+void _motion(wind *w, int x, int y, unsigned int state) {}
 
 wind * mkwind (int width, int height, int min_w, int min_h, int max_w, int max_h, char * name) {
   wind  * w;
@@ -110,10 +90,6 @@ wind * mkwind (int width, int height, int min_w, int min_h, int max_w, int max_h
   classhint->res_name = (char *) "PYcanvas";
   classhint->res_class = (char *) "PYcanvas";
 
-  //Status status; //junk
-  //Window * childlist;
-  //unsigned int ujunk;
-
   w->dsp = XOpenDisplay(NULL);
   if (! w->dsp) {
     fprintf(stderr, "Error opening display.\n");
@@ -132,7 +108,6 @@ wind * mkwind (int width, int height, int min_w, int min_h, int max_w, int max_h
               | KeyPressMask
               | KeyReleaseMask
               | FocusChangeMask
-              /*| ResizeRedirectMask * this fucks shit up, see: http://tronche.com/gui/x/icccm/sec-4.html#s-4.2.9 */
               | ExposureMask 
               | StructureNotifyMask);
   attributes.event_mask = eventmask;
@@ -149,7 +124,6 @@ wind * mkwind (int width, int height, int min_w, int min_h, int max_w, int max_h
     wm_protocols = XInternAtom(w->dsp, "WM_PROTOCOLS", False);
     wm_delete_window = XInternAtom(w->dsp, "WM_DELETE_WINDOW", False);
   }
-  //(void) XSetWMProtocols (w->dsp, w->w, &wm_delete_window, 1);
   XSetWMProtocols (w->dsp, w->w, &wm_delete_window, 1);
 
   XSetWMProperties(w->dsp, w->w, namepty, namepty, (char **) NULL, 0, hints, wmhints, classhint);
@@ -166,6 +140,7 @@ wind * mkwind (int width, int height, int min_w, int min_h, int max_w, int max_h
   w->buttondown = _buttonkey; 
   w->buttonup = _buttonkey;
   w->motion = _motion;
+  w->saved_areas = (struct saved_area *) NULL;
   make_pixmap(w);
   XFlush(w->dsp);
 
@@ -226,6 +201,9 @@ void make_pixmap(wind * w) {
   if (w->pix) {
     XFreePixmap(w->dsp, w->pix);
   }
+
+  /* invalidate any stored areas */
+  invalidate_saved_areas(w);
 
   w->pix = XCreatePixmap(w->dsp, w->w, width, height, getatts.depth);
 
@@ -498,65 +476,135 @@ void setfont(wind * w, char * fontstr) {
   }
 }
 
-/*
-// XImage type
-// loadImage copies data
-image * loadImage(wind * w, int width, int height, char * data) {
-  XImage * xi;
-  image * img;
-  img = (image *) malloc(sizeof(image));
-  xi = XCreateImage(w->dsp, 
-                    XDefaultVisualOfScreen(DefaultScreenOfDisplay(w->dsp)),
-                    getdepth(w),
-                    ZPixmap,
-                    0, //offset
-                    data,
-                    width,
-                    height,
-                    32, //bitmap pad
-                    0); //bytes per line
-  img->xi = xi;
-  img->w = w;
-  return img;
-}
+/* saved areas */
+int save_area(wind * w, int x, int y, int dx, int dy) {
+  struct saved_area * sa;
+  struct saved_area * sanext;
 
-image * newImage(wind * w, int width, int height) {
-  image * img;
-  char * data;
-  data = (char *) malloc(width * height * 4); 
-  img = loadImage(w, width, height, data);
-  free(data);
-  return img;
-}
-
-char * readImage(image * img) {
-  return img->xi->data;
-}
-
-image * captureImage(wind * w, int x, int y, int width, int height) {
-  image * img;
-  img = (image *) malloc(sizeof(image));
-  img->w = w;
-  img->xi = XGetImage(w->dsp, w->w, x, y, width, height, (unsigned long) 0x00FFFFFF, ZPixmap);
-  return img;
-}
+  if (0 == dx) {
+    dx = getwidth(w);
+  }
+  if (0 == dy) {
+    dy = getheight(w);
+  }
   
-void showImage(image * img, int x, int y) {
-  XPutImage(img->w->dsp, img->w->w, img->w->ctx, img->xi, 0, 0, x, y, img->xi->width, img->xi->height);
+  sa = (struct saved_area *) malloc(sizeof(struct saved_area));
+  if (!sa) {
+    fprintf(stderr, "Out of memory...\n");
+    exit(1);
+  }
+  sa->pix = XCreatePixmap(w->dsp, w->w, dx, dy, getdepth(w));
+  XCopyArea(w->dsp, w->pix, sa->pix, w->ctx, x, y, dx, dy, 0, 0);
+
+  sa->x = x;
+  sa->y = y;
+  sa->dx = dx; 
+  sa->dy = dy;
+  sa->valid = True;
+  sa->id = 1;
+
+  sanext = w->saved_areas;
+  if (!sanext) {
+    w->saved_areas = sa;
+    return sa->id;
+  }
+
+  while (sanext) {
+    if (sa->id == sanext->id) {
+      if (sa->id >= INT_MAX) {
+        fprintf(stderr, "Pixmap handles are exhausted\n");
+        free(sa);
+        exit(1);
+      }
+      sa->id++;
+    }
+    if (!sanext->next) {
+      break;
+    }
+    sanext = sanext->next;
+  }
+  sanext->next = sa;
+  return sa->id;
 }
 
-unsigned int peekImage(image * img, int x, int y) {
-  return XGetPixel(img->xi, x, y);
+Bool saved_area_valid(wind * w, int id) {
+  struct saved_area * sanext;
+  sanext = w->saved_areas;
+  while (sanext) {
+    if (id == sanext->id) {
+      return sanext->valid;
+    }
+    sanext = sanext->next;
+  }
+  /*error invalid id */
+  return False;
 }
 
-void pokeImage(image * img, int x, int y, unsigned int color) {
-  XPutPixel(img->xi, x, y, color);
+void _invalidate_sa(wind * w, int id) {
+  struct saved_area * sa;
+  sa = w->saved_areas;
+  while (sa) {
+    if ((id == sa->id) || (id < 0)) {
+      sa->valid = False;
+      XFreePixmap(w->dsp, sa->pix);
+      return;
+    }
+    sa = sa->next;
+  }
 }
 
-void freeImage(image * img) {
-  XDestroyImage(img->xi);
+void invalidate_saved_areas(wind * w) {
+  _invalidate_sa(w, -1);
 }
 
-*/
+void invalidate_saved_area(wind * w, int id) {
+  /* is it an error to pass in a negative id? */
+  _invalidate_sa(w, id);
+}
+
+int restore_area(wind * w, int id) {
+  struct saved_area * sa;
+  sa = w->saved_areas;
+  while (sa) {
+    if (id == sa->id) {
+      if (!sa->valid) {
+        return 0;
+      }
+      XCopyArea(w->dsp, sa->pix, w->pix, w->ctx, 0, 0, sa->dx, sa->dy, sa->x, sa->y);
+      return 1;
+    }
+    sa = sa->next;
+  }
+  return -1;
+}
+
+void free_saved_area(wind * w, int id) {
+  if (!w->saved_areas) {
+    fprintf(stderr, "Attempted to free nonexistent pixmap\n");
+    exit (1);
+  }
+  struct saved_area * sanext;
+  struct saved_area * sa;
+  sa = w->saved_areas;
+  sanext = sa->next;
+  if (id == sa->id) {
+    /* this can't be right...*/
+    struct saved_area * tmp;
+    tmp = sanext->next;
+    w->saved_areas = sanext;
+    sanext = sa;
+    sanext->next = tmp; 
+  }
+  do {
+    if (id == sanext->id) {
+      XFreePixmap(w->dsp, sanext->pix);
+      sa->next = sanext->next;
+      free(sanext);
+    }
+    sa = sa->next;
+    sanext = sanext->next;
+  } while (sanext);
+}
+
 
 

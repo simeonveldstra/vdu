@@ -18,6 +18,17 @@ typedef struct _image_node {
 } image_node;
 */
 
+struct saved_area {
+  Bool valid;
+  int id;
+  int x;
+  int y; 
+  int dx;
+  int dy;
+  Pixmap pix;
+  struct saved_area * next;
+}; 
+
 typedef struct _wind {
   Display * dsp;
   Window w;
@@ -36,6 +47,7 @@ typedef struct _wind {
   void (* buttonup)(struct _wind *w, int x, int y, unsigned int state, unsigned int button);
   void (* motion)(struct _wind * w, int x, int y, unsigned int state);
   char * udata;
+  struct saved_area * saved_areas;
   //image_node img_head;
 } wind;
 
@@ -70,13 +82,10 @@ void fill_polygon(wind * w, point_t * points, int npoints);
 void fill_arc(wind * w, int x, int y, int wth, int hgt, int ang1, int ang2);
 int text(wind * w, int x, int y, char * str) ;
 void setfont(wind * w, char * fontstr);
+int save_area(wind * w, int x, int y, int dx, int dy);
+Bool saved_area_valid(wind * w, int id);
+void invalidate_saved_area(wind * w, int id);
+void invalidate_saved_areas(wind * w);
+int restore_area(wind * w, int id);
+void free_saved_area(wind * w, int id);
 
-/*
-image * loadImage(wind * w, int width, int height, char * data);
-image * newImage(wind * w, int width, int height);
-image * captureImage(wind * w, int x, int y, int width, int height);
-void showImage(image * img, int x, int y);
-unsigned int peekImage(image * img, int x, int y);
-void pokeImage(image * img, int x, int y, unsigned int color);
-void freeImage(image * img);
-*/
