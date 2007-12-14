@@ -502,6 +502,7 @@ int save_area(wind * w, int x, int y, int dx, int dy) {
   sa->dy = dy;
   sa->valid = True;
   sa->id = 1;
+  sa->next = (struct saved_area *) NULL;
 
   sanext = w->saved_areas;
   if (!sanext) {
@@ -590,14 +591,16 @@ void free_saved_area(wind * w, int id) {
   if (id == sa->id) {
     /* this can't be right...*/
     struct saved_area * tmp;
-    tmp = sanext->next;
+    tmp = sanext;
     w->saved_areas = sanext;
     sanext = sa;
     sanext->next = tmp; 
   }
   do {
     if (id == sanext->id) {
-      XFreePixmap(w->dsp, sanext->pix);
+      if (sanext->valid) {
+        XFreePixmap(w->dsp, sanext->pix);
+      }
       sa->next = sanext->next;
       free(sanext);
     }
@@ -605,6 +608,5 @@ void free_saved_area(wind * w, int id) {
     sanext = sanext->next;
   } while (sanext);
 }
-
 
 

@@ -6,6 +6,7 @@
 #include <math.h>
 #include "scan.h"
 #include "window.h"
+#include "vdu.h"
 
 const unsigned int  colors[] = {0xff0000,
                                 0x00ff00,
@@ -99,13 +100,16 @@ void draw_window(wind * w) {
       next = next->next;
     }
   }
-  paintdir((Ftree *) w->udata, 0, 0, getwidth(w), getheight(w), 0, -1);
+  vdu_data * vd;
+  vd = (vdu_data *) w->udata;
+  paintdir(vd->ft, 0, 0, getwidth(w), getheight(w), 0, -1);
 }
 
 void find_dir(wind * w, int x, int y, unsigned int state, unsigned int code) {
   if (code == 1) {
     char name[MAXPATH] = "";
     unsigned long long size = 0;
+    char * str;
     void search(Ftree * ft, int x, int y) {
       Ftree * next;
       if ((x >= ft->x && x <= ft->x + ft->dx) && (y >= ft->y && y <= ft->y + ft->dy)) {
@@ -119,10 +123,27 @@ void find_dir(wind * w, int x, int y, unsigned int state, unsigned int code) {
         }
       }
     }
-    search((Ftree *) w->udata, x, y);
-    char * str;
+    vdu_data * vd;
+    vd = (vdu_data *) w->udata;
+    search(vd->ft, x, y);
     str = hread(size);
     printf("%s  %s\n", str, name);
+
+    if ((vd->saved_screen) && (!saved_area_valid(w, vd->saved_screen))) {
+      free_saved_area(w, vd->saved_screen);
+      vd->saved_screen = 0;
+    }
+    if (!vd->saved_screen) {
+      vd->saved_screen = save_area(w, 0, 0, 0, 0);
+    }
+    color(w, 0x000000);
+    text(w, 3, 21, name);
+    text(w, 3, 36, str);
+    color(w, 0xFFFFFF);
+    text(w, 2, 20, name);
+    text(w, 2, 35, str);
+    copy_to_screen(w);
+
     free(str);
   }
 }
@@ -130,11 +151,17 @@ void find_dir(wind * w, int x, int y, unsigned int state, unsigned int code) {
 void destroy_info(wind * w, int x, int y, unsigned int state, unsigned int code) {
   if (code == 1) {
     //printf("\n");
+    vdu_data * vd;
+    vd = (vdu_data *) w->udata;
+    if ((vd->saved_screen) && (saved_area_valid(w, vd->saved_screen))) {
+      restore_area(w, vd->saved_screen);
+      copy_to_screen(w);
+    }
   }
 }
 
 int main (int argc, char ** argv) {
-  Ftree * ft;
+  vdu_data * vd;
   int tx, ty;
   char title[256];
   char * path;
@@ -167,9 +194,16 @@ int main (int argc, char ** argv) {
   text(w, tx, ty, "Reading...");
   copy_to_screen(w);
   flush(w);
-  ft = mktree(path);
 
-  w->udata = (char *) ft;
+  vd = (vdu_data *) malloc(sizeof(vdu_data));
+  if (!vd) {
+    fprintf(stderr, "Out of memory\n");
+    exit(1);
+  }
+  vd->ft = mktree(path);
+  vd->saved_screen = 0;
+
+  w->udata = (char *) vd;
   w->draw = draw_window;
   w->buttondown = find_dir;
   w->buttonup = destroy_info;
@@ -177,7 +211,8 @@ int main (int argc, char ** argv) {
   event_loop(w);
 
   rmwind(w);
-  freetree(ft);
+  freetree(vd->ft);
+  free(vd);
   return 0;
 }
 
